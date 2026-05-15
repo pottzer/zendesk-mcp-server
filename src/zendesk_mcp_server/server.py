@@ -143,6 +143,25 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="get_article",
+            description="Retrieve the full content of a Help Center article by its ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "article_id": {
+                        "type": "integer",
+                        "description": "The ID of the article to retrieve"
+                    },
+                    "locale": {
+                        "type": "string",
+                        "description": "Locale of the article content (default: en-us)",
+                        "default": "en-us"
+                    }
+                },
+                "required": ["article_id"]
+            }
+        ),
+        types.Tool(
             name="list_categories",
             description="List all Help Center categories",
             inputSchema={
@@ -304,6 +323,18 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(results, indent=2)
+            )]
+
+        elif name == "get_article":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            article = zendesk_client.get_article(
+                article_id=arguments["article_id"],
+                locale=arguments.get("locale", "en-us"),
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(article, indent=2)
             )]
 
         elif name == "list_categories":

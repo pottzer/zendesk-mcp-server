@@ -182,16 +182,7 @@ class ZendeskClient:
                 'sort_order': sort_order
             }
             query_string = urllib.parse.urlencode(params)
-            url = f"{self.base_url}/tickets.json?{query_string}"
-
-            # Create request with auth header
-            req = urllib.request.Request(url)
-            req.add_header('Authorization', self.auth_header)
-            req.add_header('Content-Type', 'application/json')
-
-            # Make the API request
-            with urllib.request.urlopen(req) as response:
-                data = json.loads(response.read().decode())
+            data = self._api_get(f"/tickets.json?{query_string}")
 
             tickets_data = data.get('tickets', [])
 
@@ -356,14 +347,7 @@ class ZendeskClient:
                 params['sort_order'] = sort_order
 
             query_string = urllib.parse.urlencode(params)
-            url = f"{self.base_url}/help_center/articles/search?{query_string}"
-
-            req = urllib.request.Request(url)
-            req.add_header('Authorization', self.auth_header)
-            req.add_header('Content-Type', 'application/json')
-
-            with urllib.request.urlopen(req) as response:
-                data = json.loads(response.read().decode())
+            data = self._api_get(f"/help_center/articles/search?{query_string}")
 
             results = [
                 {
@@ -393,29 +377,68 @@ class ZendeskClient:
         except Exception as e:
             raise Exception(f"Failed to search articles: {str(e)}")
 
+    def _api_get(self, path: str) -> Any:
+        """Make an authenticated GET request to the Zendesk API."""
+        req = urllib.request.Request(f"{self.base_url}{path}")
+        req.add_header('Authorization', self.auth_header)
+        req.add_header('Content-Type', 'application/json')
+        with urllib.request.urlopen(req) as response:
+            return json.loads(response.read().decode())
+
+    def get_article(self, article_id: int, locale: str = 'en-us') -> Dict[str, Any]:
+        try:
+            data = self._api_get(f"/help_center/articles/{article_id}?locale={locale}")
+            a = data.get('article', {})
+            return {
+                'id': a.get('id'),
+                'title': a.get('title'),
+                'body': a.get('body'),
+                'locale': a.get('locale'),
+                'section_id': a.get('section_id'),
+                'author_id': a.get('author_id'),
+                'draft': a.get('draft'),
+                'promoted': a.get('promoted'),
+                'label_names': a.get('label_names'),
+                'html_url': a.get('html_url'),
+                'created_at': a.get('created_at'),
+                'updated_at': a.get('updated_at'),
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to get article {article_id}: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to get article {article_id}: {str(e)}")
+
     def get_all_articles(self) -> Dict[str, Any]:
         """
         Fetch help center articles as knowledge base.
         Returns a Dict of section -> [article].
         """
         try:
-            # Get all sections
             sections = self.client.help_center.sections()
-
-            # Get articles for each section
             kb = {}
             for section in sections:
-                articles = self.client.help_center.sections.articles(section.id)
+                page = 1
+                articles = []
+                while True:
+                    data = self._api_get(
+                        f"/help_center/sections/{section.id}/articles?page={page}&per_page=100"
+                    )
+                    articles.extend(data.get('articles', []))
+                    if data.get('next_page') is None:
+                        break
+                    page += 1
+
                 kb[section.name] = {
                     'section_id': section.id,
                     'description': section.description,
                     'articles': [{
-                        'id': article.id,
-                        'title': article.title,
-                        'body': article.body,
-                        'updated_at': str(article.updated_at),
-                        'url': article.html_url
-                    } for article in articles]
+                        'id': a.get('id'),
+                        'title': a.get('title'),
+                        'body': a.get('body'),
+                        'updated_at': a.get('updated_at'),
+                        'url': a.get('html_url'),
+                    } for a in articles]
                 }
 
             return kb
