@@ -3,13 +3,14 @@
 ![ci](https://github.com/reminia/zendesk-mcp-server/actions/workflows/ci.yml/badge.svg)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A Model Context Protocol server for Zendesk.
+A Model Context Protocol server for Zendesk, focused on Help Center (Knowledge Base) management.
 
-This server provides a comprehensive integration with Zendesk. It offers:
+This server provides:
 
-- Tools for retrieving and managing Zendesk tickets and comments
-- Specialized prompts for ticket analysis and response drafting
-- Full access to the Zendesk Help Center articles as knowledge base
+- Full CRUD for Help Center **Categories** (list, get, create, update)
+- Article **search** with filters for locale, category, section, and labels
+- **Read-only ticket tools** for referencing past tickets when authoring articles
+- Full access to the Zendesk Help Center as a knowledge base resource
 
 ![demo](https://res.cloudinary.com/leecy-me/image/upload/v1736410626/open/zendesk_yunczu.gif)
 
@@ -80,83 +81,63 @@ To use the Dockerized server from Claude Code/Desktop, add an entry to Claude Co
 
 Adjust the paths to match your environment. After saving the file, restart Claude for the new MCP server to be detected.
 
+## Testing
+
+The test suite runs integration tests against the live Zendesk API. All tests require valid credentials in `.env`.
+
+### Install dev dependencies
+
+```bash
+uv sync --group dev
+```
+
+### Run all tests
+
+```bash
+uv run pytest tests/ -v
+```
+
+### Optional environment variables
+
+Set these in `.env` to pin tests to known-good IDs. If omitted, tests fall back to the first item returned by the corresponding list call.
+
+| Variable | Used by |
+|---|---|
+| `TEST_CATEGORY_ID` | `test_get_category_returns_expected_id` |
+| `TEST_ARTICLE_ID` | `test_get_article_returns_expected_id` |
+| `TEST_TICKET_ID` | `test_get_ticket_returns_expected_id`, `test_get_ticket_comments_returns_list` |
+
+### Startup auth check
+
+The server also verifies credentials on every startup by calling `GET /api/v2/users/me`. If the credentials are invalid it exits immediately with a clear error rather than failing silently on the first tool call.
+
 ## Resources
 
 - zendesk://knowledge-base, get access to the whole help center articles.
 
-## Prompts
-
-### analyze-ticket
-
-Analyze a Zendesk ticket and provide a detailed analysis of the ticket.
-
-### draft-ticket-response
-
-Draft a response to a Zendesk ticket.
-
 ## Tools
 
-### get_tickets
+### Knowledge Base — Categories
 
-Fetch the latest tickets with pagination support
+| Tool | Description |
+|---|---|
+| `list_categories` | List all Help Center categories |
+| `get_category` | Retrieve a category by ID |
+| `create_category` | Create a new category |
+| `update_category` | Update an existing category |
 
-- Input:
-  - `page` (integer, optional): Page number (defaults to 1)
-  - `per_page` (integer, optional): Number of tickets per page, max 100 (defaults to 25)
-  - `sort_by` (string, optional): Field to sort by - created_at, updated_at, priority, or status (defaults to created_at)
-  - `sort_order` (string, optional): Sort order - asc or desc (defaults to desc)
+### Knowledge Base — Articles
 
-- Output: Returns a list of tickets with essential fields including id, subject, status, priority, description, timestamps, and assignee information, along with pagination metadata
+| Tool | Description |
+|---|---|
+| `search_articles` | Search articles by keyword, category, section, or label |
+| `get_article` | Retrieve the full content of an article by ID |
 
-### get_ticket
+### Tickets (read-only)
 
-Retrieve a Zendesk ticket by its ID
-
-- Input:
-  - `ticket_id` (integer): The ID of the ticket to retrieve
-
-### get_ticket_comments
-
-Retrieve all comments for a Zendesk ticket by its ID
-
-- Input:
-  - `ticket_id` (integer): The ID of the ticket to get comments for
-
-### create_ticket_comment
-
-Create a new comment on an existing Zendesk ticket
-
-- Input:
-  - `ticket_id` (integer): The ID of the ticket to comment on
-  - `comment` (string): The comment text/content to add
-  - `public` (boolean, optional): Whether the comment should be public (defaults to true)
-
-### create_ticket
-
-Create a new Zendesk ticket
-
-- Input:
-  - `subject` (string): Ticket subject
-  - `description` (string): Ticket description
-  - `requester_id` (integer, optional)
-  - `assignee_id` (integer, optional)
-  - `priority` (string, optional): one of `low`, `normal`, `high`, `urgent`
-  - `type` (string, optional): one of `problem`, `incident`, `question`, `task`
-  - `tags` (array[string], optional)
-  - `custom_fields` (array[object], optional)
-
-### update_ticket
-
-Update fields on an existing Zendesk ticket (e.g., status, priority, assignee)
-
-- Input:
-  - `ticket_id` (integer): The ID of the ticket to update
-  - `subject` (string, optional)
-  - `status` (string, optional): one of `new`, `open`, `pending`, `on-hold`, `solved`, `closed`
-  - `priority` (string, optional): one of `low`, `normal`, `high`, `urgent`
-  - `type` (string, optional)
-  - `assignee_id` (integer, optional)
-  - `requester_id` (integer, optional)
-  - `tags` (array[string], optional)
-  - `custom_fields` (array[object], optional)
-  - `due_at` (string, optional): ISO8601 datetime
+| Tool | Description |
+|---|---|
+| `get_tickets` | Fetch tickets with pagination and sorting |
+| `get_ticket` | Retrieve a ticket by ID |
+| `get_ticket_comments` | Retrieve all comments for a ticket |
+| `get_ticket_attachment` | Fetch a ticket attachment as base64-encoded data |
