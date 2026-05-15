@@ -319,6 +319,80 @@ class ZendeskClient:
         except Exception as e:
             raise Exception(f"Failed to update category {category_id}: {str(e)}")
 
+    def search_articles(
+        self,
+        query: str | None = None,
+        locale: str = 'en-us',
+        category_id: int | None = None,
+        section_id: int | None = None,
+        label_names: str | None = None,
+        sort_by: str | None = None,
+        sort_order: str | None = None,
+        page: int = 1,
+        per_page: int = 25,
+    ) -> Dict[str, Any]:
+        # At least one of query, category, section, or label_names is required by the API
+        if not any([query, category_id, section_id, label_names]):
+            raise ValueError("At least one of query, category_id, section_id, or label_names must be provided")
+
+        try:
+            per_page = min(per_page, 100)
+            params: Dict[str, Any] = {
+                'locale': locale,
+                'page': page,
+                'per_page': per_page,
+            }
+            if query:
+                params['query'] = query
+            if category_id is not None:
+                params['category'] = category_id
+            if section_id is not None:
+                params['section'] = section_id
+            if label_names:
+                params['label_names'] = label_names
+            if sort_by:
+                params['sort_by'] = sort_by
+            if sort_order:
+                params['sort_order'] = sort_order
+
+            query_string = urllib.parse.urlencode(params)
+            url = f"{self.base_url}/help_center/articles/search?{query_string}"
+
+            req = urllib.request.Request(url)
+            req.add_header('Authorization', self.auth_header)
+            req.add_header('Content-Type', 'application/json')
+
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode())
+
+            results = [
+                {
+                    'id': a.get('id'),
+                    'title': a.get('title'),
+                    'snippet': a.get('snippet'),
+                    'locale': a.get('locale'),
+                    'section_id': a.get('section_id'),
+                    'html_url': a.get('html_url'),
+                    'updated_at': a.get('updated_at'),
+                }
+                for a in data.get('results', [])
+            ]
+
+            return {
+                'results': results,
+                'count': data.get('count', len(results)),
+                'page': page,
+                'per_page': per_page,
+                'page_count': data.get('page_count'),
+                'next_page': data.get('next_page'),
+                'previous_page': data.get('previous_page'),
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to search articles: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to search articles: {str(e)}")
+
     def get_all_articles(self) -> Dict[str, Any]:
         """
         Fetch help center articles as knowledge base.
