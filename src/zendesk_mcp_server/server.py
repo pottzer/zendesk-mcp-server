@@ -94,6 +94,55 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="search_articles",
+            description="Search Help Center articles by keyword, category, section, or label. Returns titles, snippets, and URLs. At least one of query, category_id, section_id, or label_names must be provided.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search keywords"
+                    },
+                    "locale": {
+                        "type": "string",
+                        "description": "Locale to search in (default: en-us)",
+                        "default": "en-us"
+                    },
+                    "category_id": {
+                        "type": "integer",
+                        "description": "Limit results to a specific category ID"
+                    },
+                    "section_id": {
+                        "type": "integer",
+                        "description": "Limit results to a specific section ID"
+                    },
+                    "label_names": {
+                        "type": "string",
+                        "description": "Comma-separated list of labels to filter by"
+                    },
+                    "sort_by": {
+                        "type": "string",
+                        "description": "Sort field: created_at or updated_at"
+                    },
+                    "sort_order": {
+                        "type": "string",
+                        "description": "Sort direction: asc or desc"
+                    },
+                    "page": {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "default": 1
+                    },
+                    "per_page": {
+                        "type": "integer",
+                        "description": "Results per page, max 100 (default: 25)",
+                        "default": 25
+                    }
+                },
+                "required": []
+            }
+        ),
+        types.Tool(
             name="list_categories",
             description="List all Help Center categories",
             inputSchema={
@@ -238,6 +287,23 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(comments)
+            )]
+
+        elif name == "search_articles":
+            results = zendesk_client.search_articles(
+                query=arguments.get("query") if arguments else None,
+                locale=arguments.get("locale", "en-us") if arguments else "en-us",
+                category_id=arguments.get("category_id") if arguments else None,
+                section_id=arguments.get("section_id") if arguments else None,
+                label_names=arguments.get("label_names") if arguments else None,
+                sort_by=arguments.get("sort_by") if arguments else None,
+                sort_order=arguments.get("sort_order") if arguments else None,
+                page=arguments.get("page", 1) if arguments else 1,
+                per_page=arguments.get("per_page", 25) if arguments else 25,
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(results, indent=2)
             )]
 
         elif name == "list_categories":
