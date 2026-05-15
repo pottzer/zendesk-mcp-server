@@ -385,6 +385,18 @@ class ZendeskClient:
         with urllib.request.urlopen(req) as response:
             return json.loads(response.read().decode())
 
+    def verify_auth(self) -> Dict[str, Any]:
+        """Call /api/v2/users/me to confirm credentials are valid. Raises on failure."""
+        try:
+            data = self._api_get("/users/me")
+            user = data.get('user', {})
+            return {'id': user.get('id'), 'name': user.get('name'), 'email': user.get('email')}
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Authentication failed: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Authentication check failed: {str(e)}")
+
     def get_article(self, article_id: int, locale: str = 'en-us') -> Dict[str, Any]:
         try:
             data = self._api_get(f"/help_center/articles/{article_id}?locale={locale}")

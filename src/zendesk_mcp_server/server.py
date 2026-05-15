@@ -458,7 +458,13 @@ async def handle_read_resource(uri: AnyUrl) -> str:
 
 
 async def main():
-    # Run the server using stdin/stdout streams
+    try:
+        user = zendesk_client.verify_auth()
+        logger.info(f"Zendesk authentication verified for {user['email']}")
+    except Exception as e:
+        logger.error(f"Startup authentication check failed: {e}")
+        raise SystemExit(1)
+
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream=read_stream,
