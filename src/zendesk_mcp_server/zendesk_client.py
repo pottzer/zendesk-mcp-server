@@ -385,6 +385,30 @@ class ZendeskClient:
         with urllib.request.urlopen(req) as response:
             return json.loads(response.read().decode())
 
+    def get_article(self, article_id: int, locale: str = 'en-us') -> Dict[str, Any]:
+        try:
+            data = self._api_get(f"/help_center/articles/{article_id}?locale={locale}")
+            a = data.get('article', {})
+            return {
+                'id': a.get('id'),
+                'title': a.get('title'),
+                'body': a.get('body'),
+                'locale': a.get('locale'),
+                'section_id': a.get('section_id'),
+                'author_id': a.get('author_id'),
+                'draft': a.get('draft'),
+                'promoted': a.get('promoted'),
+                'label_names': a.get('label_names'),
+                'html_url': a.get('html_url'),
+                'created_at': a.get('created_at'),
+                'updated_at': a.get('updated_at'),
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to get article {article_id}: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to get article {article_id}: {str(e)}")
+
     def get_all_articles(self) -> Dict[str, Any]:
         """
         Fetch help center articles as knowledge base.
