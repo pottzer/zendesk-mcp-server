@@ -94,6 +94,93 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="list_categories",
+            description="List all Help Center categories",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "locale": {
+                        "type": "string",
+                        "description": "Locale for category names and descriptions (default: en-us)",
+                        "default": "en-us"
+                    }
+                },
+                "required": []
+            }
+        ),
+        types.Tool(
+            name="get_category",
+            description="Retrieve a single Help Center category by ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "category_id": {
+                        "type": "integer",
+                        "description": "The ID of the category to retrieve"
+                    },
+                    "locale": {
+                        "type": "string",
+                        "description": "Locale for category content (default: en-us)",
+                        "default": "en-us"
+                    }
+                },
+                "required": ["category_id"]
+            }
+        ),
+        types.Tool(
+            name="create_category",
+            description="Create a new Help Center category",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Category name"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Category description"
+                    },
+                    "locale": {
+                        "type": "string",
+                        "description": "Locale for the category (default: en-us)",
+                        "default": "en-us"
+                    },
+                    "position": {
+                        "type": "integer",
+                        "description": "Display position (lower numbers appear first)"
+                    }
+                },
+                "required": ["name"]
+            }
+        ),
+        types.Tool(
+            name="update_category",
+            description="Update an existing Help Center category",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "category_id": {
+                        "type": "integer",
+                        "description": "The ID of the category to update"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "New category name"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "New category description"
+                    },
+                    "position": {
+                        "type": "integer",
+                        "description": "New display position"
+                    }
+                },
+                "required": ["category_id"]
+            }
+        ),
+        types.Tool(
             name="get_ticket_attachment",
             description="Fetch a Zendesk ticket attachment by its content_url and return the file as base64-encoded data. Use the attachment URLs returned by get_ticket_comments.",
             inputSchema={
@@ -151,6 +238,55 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(comments)
+            )]
+
+        elif name == "list_categories":
+            locale = arguments.get("locale", "en-us") if arguments else "en-us"
+            categories = zendesk_client.list_categories(locale=locale)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(categories, indent=2)
+            )]
+
+        elif name == "get_category":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            locale = arguments.get("locale", "en-us")
+            category = zendesk_client.get_category(
+                category_id=arguments["category_id"],
+                locale=locale
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(category, indent=2)
+            )]
+
+        elif name == "create_category":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            category = zendesk_client.create_category(
+                name=arguments["name"],
+                description=arguments.get("description"),
+                locale=arguments.get("locale", "en-us"),
+                position=arguments.get("position"),
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"message": "Category created successfully", "category": category}, indent=2)
+            )]
+
+        elif name == "update_category":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            category = zendesk_client.update_category(
+                category_id=arguments["category_id"],
+                name=arguments.get("name"),
+                description=arguments.get("description"),
+                position=arguments.get("position"),
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"message": "Category updated successfully", "category": category}, indent=2)
             )]
 
         elif name == "get_ticket_attachment":
