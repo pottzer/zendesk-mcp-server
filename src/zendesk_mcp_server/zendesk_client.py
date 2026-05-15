@@ -6,6 +6,7 @@ import base64
 import requests as _requests
 
 from zenpy import Zenpy
+from zenpy.lib.api_objects.help_centre_objects import Category, Section, Article
 
 
 class ZendeskClient:
@@ -225,6 +226,98 @@ class ZendeskClient:
             raise Exception(f"Failed to get latest tickets: HTTP {e.code} - {e.reason}. {error_body}")
         except Exception as e:
             raise Exception(f"Failed to get latest tickets: {str(e)}")
+
+    def list_categories(self, locale: str = 'en-us') -> List[Dict[str, Any]]:
+        try:
+            categories = self.client.help_center.categories(locale=locale)
+            return [
+                {
+                    'id': c.id,
+                    'name': c.name,
+                    'description': c.description,
+                    'locale': c.locale,
+                    'position': c.position,
+                    'html_url': c.html_url,
+                    'created_at': str(c.created_at),
+                    'updated_at': str(c.updated_at),
+                }
+                for c in categories
+            ]
+        except Exception as e:
+            raise Exception(f"Failed to list categories: {str(e)}")
+
+    def get_category(self, category_id: int, locale: str = 'en-us') -> Dict[str, Any]:
+        try:
+            c = self.client.help_center.categories(id=category_id, locale=locale)
+            return {
+                'id': c.id,
+                'name': c.name,
+                'description': c.description,
+                'locale': c.locale,
+                'position': c.position,
+                'html_url': c.html_url,
+                'created_at': str(c.created_at),
+                'updated_at': str(c.updated_at),
+            }
+        except Exception as e:
+            raise Exception(f"Failed to get category {category_id}: {str(e)}")
+
+    def create_category(
+        self,
+        name: str,
+        description: str | None = None,
+        locale: str = 'en-us',
+        position: int | None = None,
+    ) -> Dict[str, Any]:
+        try:
+            category = Category(
+                name=name,
+                description=description,
+                locale=locale,
+                position=position,
+            )
+            created = self.client.help_center.categories.create(category)
+            return {
+                'id': created.id,
+                'name': created.name,
+                'description': created.description,
+                'locale': created.locale,
+                'position': created.position,
+                'html_url': created.html_url,
+                'created_at': str(created.created_at),
+                'updated_at': str(created.updated_at),
+            }
+        except Exception as e:
+            raise Exception(f"Failed to create category: {str(e)}")
+
+    def update_category(
+        self,
+        category_id: int,
+        name: str | None = None,
+        description: str | None = None,
+        position: int | None = None,
+    ) -> Dict[str, Any]:
+        try:
+            category = self.client.help_center.categories(id=category_id)
+            if name is not None:
+                category.name = name
+            if description is not None:
+                category.description = description
+            if position is not None:
+                category.position = position
+            updated = self.client.help_center.categories.update(category)
+            return {
+                'id': updated.id,
+                'name': updated.name,
+                'description': updated.description,
+                'locale': updated.locale,
+                'position': updated.position,
+                'html_url': updated.html_url,
+                'created_at': str(updated.created_at),
+                'updated_at': str(updated.updated_at),
+            }
+        except Exception as e:
+            raise Exception(f"Failed to update category {category_id}: {str(e)}")
 
     def get_all_articles(self) -> Dict[str, Any]:
         """
