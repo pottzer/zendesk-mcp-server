@@ -162,6 +162,24 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="create_internal_note",
+            description="Post an internal (non-public) note on an existing Zendesk ticket. The note is only visible to agents, never to the customer.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "The ID of the ticket to add the note to"
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Note content as raw HTML"
+                    }
+                },
+                "required": ["ticket_id", "body"]
+            }
+        ),
+        types.Tool(
             name="list_sections",
             description="List Help Center sections, optionally filtered by category",
             inputSchema={
@@ -435,6 +453,18 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(article, indent=2)
+            )]
+
+        elif name == "create_internal_note":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            result = zendesk_client.create_internal_note(
+                ticket_id=arguments["ticket_id"],
+                body=arguments["body"],
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"message": "Internal note posted successfully", "note": result}, indent=2)
             )]
 
         elif name == "list_sections":

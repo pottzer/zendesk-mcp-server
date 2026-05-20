@@ -654,6 +654,30 @@ class ZendeskClient:
         except Exception as e:
             raise Exception(f"Failed to update article {article_id}: {str(e)}")
 
+    # ------------------------------------------------------------------
+    # Tickets — write
+    # ------------------------------------------------------------------
+
+    def create_internal_note(self, ticket_id: int, body: str) -> Dict[str, Any]:
+        try:
+            payload = {'ticket': {'comment': {'html_body': body, 'public': False}}}
+            data = self._api_put(f"/tickets/{ticket_id}", payload)
+            audit = data.get('audit', {})
+            events = audit.get('events', [])
+            comment_event = next((e for e in events if e.get('type') == 'Comment'), {})
+            return {
+                'ticket_id': ticket_id,
+                'comment_id': comment_event.get('id'),
+                'body': comment_event.get('html_body'),
+                'public': comment_event.get('public', False),
+                'created_at': comment_event.get('created_at'),
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to create internal note on ticket {ticket_id}: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to create internal note on ticket {ticket_id}: {str(e)}")
+
     def verify_auth(self) -> Dict[str, Any]:
         """Call /api/v2/users/me to confirm credentials are valid. Raises on failure."""
         try:
