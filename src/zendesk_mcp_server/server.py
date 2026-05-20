@@ -162,6 +162,106 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="list_sections",
+            description="List Help Center sections, optionally filtered by category",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "category_id": {"type": "integer", "description": "Filter sections by category ID"},
+                    "locale": {"type": "string", "description": "Locale (default: en-us)", "default": "en-us"}
+                },
+                "required": []
+            }
+        ),
+        types.Tool(
+            name="get_section",
+            description="Retrieve a Help Center section by ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "section_id": {"type": "integer", "description": "The ID of the section to retrieve"},
+                    "locale": {"type": "string", "description": "Locale (default: en-us)", "default": "en-us"}
+                },
+                "required": ["section_id"]
+            }
+        ),
+        types.Tool(
+            name="create_section",
+            description="Create a new Help Center section within a category",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Section name"},
+                    "category_id": {"type": "integer", "description": "The category this section belongs to"},
+                    "description": {"type": "string", "description": "Section description"},
+                    "locale": {"type": "string", "description": "Locale (default: en-us)", "default": "en-us"},
+                    "position": {"type": "integer", "description": "Display position (lower numbers appear first)"}
+                },
+                "required": ["name", "category_id"]
+            }
+        ),
+        types.Tool(
+            name="update_section",
+            description="Update an existing Help Center section",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "section_id": {"type": "integer", "description": "The ID of the section to update"},
+                    "name": {"type": "string", "description": "New section name"},
+                    "description": {"type": "string", "description": "New section description"},
+                    "position": {"type": "integer", "description": "New display position"}
+                },
+                "required": ["section_id"]
+            }
+        ),
+        types.Tool(
+            name="list_articles",
+            description="List Help Center articles, optionally filtered by section",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "section_id": {"type": "integer", "description": "Filter articles by section ID"},
+                    "locale": {"type": "string", "description": "Locale (default: en-us)", "default": "en-us"},
+                    "page": {"type": "integer", "description": "Page number (default: 1)", "default": 1},
+                    "per_page": {"type": "integer", "description": "Results per page, max 100 (default: 25)", "default": 25}
+                },
+                "required": []
+            }
+        ),
+        types.Tool(
+            name="create_article",
+            description="Create a new Help Center article in a section. Body accepts raw HTML for formatting.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "section_id": {"type": "integer", "description": "The section this article belongs to"},
+                    "title": {"type": "string", "description": "Article title"},
+                    "body": {"type": "string", "description": "Article body as raw HTML"},
+                    "locale": {"type": "string", "description": "Locale (default: en-us)", "default": "en-us"},
+                    "draft": {"type": "boolean", "description": "Save as draft (default: true)", "default": True},
+                    "label_names": {"type": "array", "items": {"type": "string"}, "description": "Labels to apply"},
+                    "promoted": {"type": "boolean", "description": "Pin article to top of section (default: false)", "default": False}
+                },
+                "required": ["section_id", "title", "body"]
+            }
+        ),
+        types.Tool(
+            name="update_article",
+            description="Update an existing Help Center article. Body accepts raw HTML.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "article_id": {"type": "integer", "description": "The ID of the article to update"},
+                    "title": {"type": "string", "description": "New article title"},
+                    "body": {"type": "string", "description": "New article body as raw HTML"},
+                    "draft": {"type": "boolean", "description": "Draft status"},
+                    "label_names": {"type": "array", "items": {"type": "string"}, "description": "Labels to apply"},
+                    "promoted": {"type": "boolean", "description": "Pin article to top of section"}
+                },
+                "required": ["article_id"]
+            }
+        ),
+        types.Tool(
             name="list_categories",
             description="List all Help Center categories",
             inputSchema={
@@ -335,6 +435,93 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(article, indent=2)
+            )]
+
+        elif name == "list_sections":
+            sections = zendesk_client.list_sections(
+                category_id=arguments.get("category_id") if arguments else None,
+                locale=arguments.get("locale", "en-us") if arguments else "en-us",
+            )
+            return [types.TextContent(type="text", text=json.dumps(sections, indent=2))]
+
+        elif name == "get_section":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            section = zendesk_client.get_section(
+                section_id=arguments["section_id"],
+                locale=arguments.get("locale", "en-us"),
+            )
+            return [types.TextContent(type="text", text=json.dumps(section, indent=2))]
+
+        elif name == "create_section":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            section = zendesk_client.create_section(
+                name=arguments["name"],
+                category_id=arguments["category_id"],
+                description=arguments.get("description"),
+                locale=arguments.get("locale", "en-us"),
+                position=arguments.get("position"),
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"message": "Section created successfully", "section": section}, indent=2)
+            )]
+
+        elif name == "update_section":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            section = zendesk_client.update_section(
+                section_id=arguments["section_id"],
+                name=arguments.get("name"),
+                description=arguments.get("description"),
+                position=arguments.get("position"),
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"message": "Section updated successfully", "section": section}, indent=2)
+            )]
+
+        elif name == "list_articles":
+            articles = zendesk_client.list_articles(
+                section_id=arguments.get("section_id") if arguments else None,
+                locale=arguments.get("locale", "en-us") if arguments else "en-us",
+                page=arguments.get("page", 1) if arguments else 1,
+                per_page=arguments.get("per_page", 25) if arguments else 25,
+            )
+            return [types.TextContent(type="text", text=json.dumps(articles, indent=2))]
+
+        elif name == "create_article":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            article = zendesk_client.create_article(
+                section_id=arguments["section_id"],
+                title=arguments["title"],
+                body=arguments["body"],
+                locale=arguments.get("locale", "en-us"),
+                draft=arguments.get("draft", True),
+                label_names=arguments.get("label_names"),
+                promoted=arguments.get("promoted", False),
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"message": "Article created successfully", "article": article}, indent=2)
+            )]
+
+        elif name == "update_article":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            article = zendesk_client.update_article(
+                article_id=arguments["article_id"],
+                title=arguments.get("title"),
+                body=arguments.get("body"),
+                draft=arguments.get("draft"),
+                label_names=arguments.get("label_names"),
+                promoted=arguments.get("promoted"),
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"message": "Article updated successfully", "article": article}, indent=2)
             )]
 
         elif name == "list_categories":

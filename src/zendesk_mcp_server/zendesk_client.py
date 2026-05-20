@@ -378,12 +378,281 @@ class ZendeskClient:
             raise Exception(f"Failed to search articles: {str(e)}")
 
     def _api_get(self, path: str) -> Any:
-        """Make an authenticated GET request to the Zendesk API."""
         req = urllib.request.Request(f"{self.base_url}{path}")
         req.add_header('Authorization', self.auth_header)
         req.add_header('Content-Type', 'application/json')
         with urllib.request.urlopen(req) as response:
             return json.loads(response.read().decode())
+
+    def _api_post(self, path: str, body: Dict[str, Any]) -> Any:
+        data = json.dumps(body).encode()
+        req = urllib.request.Request(f"{self.base_url}{path}", data=data, method='POST')
+        req.add_header('Authorization', self.auth_header)
+        req.add_header('Content-Type', 'application/json')
+        with urllib.request.urlopen(req) as response:
+            return json.loads(response.read().decode())
+
+    def _api_put(self, path: str, body: Dict[str, Any]) -> Any:
+        data = json.dumps(body).encode()
+        req = urllib.request.Request(f"{self.base_url}{path}", data=data, method='PUT')
+        req.add_header('Authorization', self.auth_header)
+        req.add_header('Content-Type', 'application/json')
+        with urllib.request.urlopen(req) as response:
+            return json.loads(response.read().decode())
+
+    # ------------------------------------------------------------------
+    # Sections
+    # ------------------------------------------------------------------
+
+    def list_sections(self, category_id: int | None = None, locale: str = 'en-us') -> List[Dict[str, Any]]:
+        try:
+            path = (
+                f"/help_center/categories/{category_id}/sections?locale={locale}"
+                if category_id
+                else f"/help_center/sections?locale={locale}"
+            )
+            data = self._api_get(path)
+            return [
+                {
+                    'id': s.get('id'),
+                    'name': s.get('name'),
+                    'description': s.get('description'),
+                    'locale': s.get('locale'),
+                    'category_id': s.get('category_id'),
+                    'position': s.get('position'),
+                    'html_url': s.get('html_url'),
+                    'created_at': s.get('created_at'),
+                    'updated_at': s.get('updated_at'),
+                }
+                for s in data.get('sections', [])
+            ]
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to list sections: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to list sections: {str(e)}")
+
+    def get_section(self, section_id: int, locale: str = 'en-us') -> Dict[str, Any]:
+        try:
+            data = self._api_get(f"/help_center/sections/{section_id}?locale={locale}")
+            s = data.get('section', {})
+            return {
+                'id': s.get('id'),
+                'name': s.get('name'),
+                'description': s.get('description'),
+                'locale': s.get('locale'),
+                'category_id': s.get('category_id'),
+                'position': s.get('position'),
+                'html_url': s.get('html_url'),
+                'created_at': s.get('created_at'),
+                'updated_at': s.get('updated_at'),
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to get section {section_id}: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to get section {section_id}: {str(e)}")
+
+    def create_section(
+        self,
+        name: str,
+        category_id: int,
+        description: str | None = None,
+        locale: str = 'en-us',
+        position: int | None = None,
+    ) -> Dict[str, Any]:
+        try:
+            body: Dict[str, Any] = {'name': name, 'locale': locale}
+            if description is not None:
+                body['description'] = description
+            if position is not None:
+                body['position'] = position
+            data = self._api_post(
+                f"/help_center/categories/{category_id}/sections",
+                {'section': body},
+            )
+            s = data.get('section', {})
+            return {
+                'id': s.get('id'),
+                'name': s.get('name'),
+                'description': s.get('description'),
+                'locale': s.get('locale'),
+                'category_id': s.get('category_id'),
+                'position': s.get('position'),
+                'html_url': s.get('html_url'),
+                'created_at': s.get('created_at'),
+                'updated_at': s.get('updated_at'),
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to create section: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to create section: {str(e)}")
+
+    def update_section(
+        self,
+        section_id: int,
+        name: str | None = None,
+        description: str | None = None,
+        position: int | None = None,
+    ) -> Dict[str, Any]:
+        try:
+            body: Dict[str, Any] = {}
+            if name is not None:
+                body['name'] = name
+            if description is not None:
+                body['description'] = description
+            if position is not None:
+                body['position'] = position
+            data = self._api_put(f"/help_center/sections/{section_id}", {'section': body})
+            s = data.get('section', {})
+            return {
+                'id': s.get('id'),
+                'name': s.get('name'),
+                'description': s.get('description'),
+                'locale': s.get('locale'),
+                'category_id': s.get('category_id'),
+                'position': s.get('position'),
+                'html_url': s.get('html_url'),
+                'created_at': s.get('created_at'),
+                'updated_at': s.get('updated_at'),
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to update section {section_id}: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to update section {section_id}: {str(e)}")
+
+    # ------------------------------------------------------------------
+    # Articles
+    # ------------------------------------------------------------------
+
+    def list_articles(
+        self,
+        section_id: int | None = None,
+        locale: str = 'en-us',
+        page: int = 1,
+        per_page: int = 25,
+    ) -> Dict[str, Any]:
+        try:
+            per_page = min(per_page, 100)
+            params = urllib.parse.urlencode({'locale': locale, 'page': page, 'per_page': per_page})
+            path = (
+                f"/help_center/sections/{section_id}/articles?{params}"
+                if section_id
+                else f"/help_center/articles?{params}"
+            )
+            data = self._api_get(path)
+            articles = [
+                {
+                    'id': a.get('id'),
+                    'title': a.get('title'),
+                    'locale': a.get('locale'),
+                    'section_id': a.get('section_id'),
+                    'draft': a.get('draft'),
+                    'promoted': a.get('promoted'),
+                    'html_url': a.get('html_url'),
+                    'updated_at': a.get('updated_at'),
+                }
+                for a in data.get('articles', [])
+            ]
+            return {
+                'articles': articles,
+                'count': data.get('count', len(articles)),
+                'page': page,
+                'per_page': per_page,
+                'next_page': data.get('next_page'),
+                'previous_page': data.get('previous_page'),
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to list articles: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to list articles: {str(e)}")
+
+    def create_article(
+        self,
+        section_id: int,
+        title: str,
+        body: str,
+        locale: str = 'en-us',
+        draft: bool = True,
+        label_names: List[str] | None = None,
+        promoted: bool = False,
+    ) -> Dict[str, Any]:
+        try:
+            payload: Dict[str, Any] = {
+                'title': title,
+                'body': body,
+                'locale': locale,
+                'draft': draft,
+                'promoted': promoted,
+            }
+            if label_names:
+                payload['label_names'] = label_names
+            data = self._api_post(
+                f"/help_center/sections/{section_id}/articles",
+                {'article': payload},
+            )
+            a = data.get('article', {})
+            return {
+                'id': a.get('id'),
+                'title': a.get('title'),
+                'locale': a.get('locale'),
+                'section_id': a.get('section_id'),
+                'draft': a.get('draft'),
+                'promoted': a.get('promoted'),
+                'label_names': a.get('label_names'),
+                'html_url': a.get('html_url'),
+                'created_at': a.get('created_at'),
+                'updated_at': a.get('updated_at'),
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to create article: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to create article: {str(e)}")
+
+    def update_article(
+        self,
+        article_id: int,
+        title: str | None = None,
+        body: str | None = None,
+        draft: bool | None = None,
+        label_names: List[str] | None = None,
+        promoted: bool | None = None,
+    ) -> Dict[str, Any]:
+        try:
+            payload: Dict[str, Any] = {}
+            if title is not None:
+                payload['title'] = title
+            if body is not None:
+                payload['body'] = body
+            if draft is not None:
+                payload['draft'] = draft
+            if label_names is not None:
+                payload['label_names'] = label_names
+            if promoted is not None:
+                payload['promoted'] = promoted
+            data = self._api_put(f"/help_center/articles/{article_id}", {'article': payload})
+            a = data.get('article', {})
+            return {
+                'id': a.get('id'),
+                'title': a.get('title'),
+                'locale': a.get('locale'),
+                'section_id': a.get('section_id'),
+                'draft': a.get('draft'),
+                'promoted': a.get('promoted'),
+                'label_names': a.get('label_names'),
+                'html_url': a.get('html_url'),
+                'created_at': a.get('created_at'),
+                'updated_at': a.get('updated_at'),
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to update article {article_id}: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to update article {article_id}: {str(e)}")
 
     def verify_auth(self) -> Dict[str, Any]:
         """Call /api/v2/users/me to confirm credentials are valid. Raises on failure."""
