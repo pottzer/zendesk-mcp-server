@@ -400,6 +400,16 @@ class ZendeskClient:
         with urllib.request.urlopen(req) as response:
             return json.loads(response.read().decode())
 
+    def _api_post_multipart(self, path: str, fields: Dict[str, str]) -> Any:
+        response = _requests.post(
+            f"{self.base_url}{path}",
+            headers={'Authorization': self.auth_header},
+            data=fields,
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
+
     # ------------------------------------------------------------------
     # Sections
     # ------------------------------------------------------------------
@@ -653,6 +663,84 @@ class ZendeskClient:
             raise Exception(f"Failed to update article {article_id}: HTTP {e.code} - {e.reason}. {error_body}")
         except Exception as e:
             raise Exception(f"Failed to update article {article_id}: {str(e)}")
+
+    # ------------------------------------------------------------------
+    # Article attachments
+    # ------------------------------------------------------------------
+
+    def upload_article_attachment(
+        self,
+        article_id: int,
+        filename: str,
+        file_content_base64: str,
+        content_type: str,
+        inline: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Upload a file and attach it to an existing article.
+
+        Zendesk requires a three-step process before the attachment can be created:
+          1. POST /api/v2/guide/medias/upload_url  — obtain a pre-signed upload URL
+          2. PUT  {upload_url}                      — upload the raw file (no auth header)
+          3. POST /api/v2/guide/medias              — create the media object
+          4. POST /api/v2/help_center/articles/{id}/attachments — attach to the article
+
+        Returns the attachment record including content_url for embedding in article HTML.
+        """
+        file_bytes = base64.b64decode(file_content_base64)
+        if len(file_bytes) > 20 * 1024 * 1024:
+            raise ValueError("File exceeds the 20 MB Zendesk attachment limit.")
+
+        try:
+            # Step 1 — request a pre-signed upload URL
+            upload_url_data = self._api_post(
+                "/guide/medias/upload_url",
+                {"filename": filename, "content_type": content_type},
+            )
+            upload_url = upload_url_data.get("upload_url")
+            asset_upload_id = upload_url_data.get("asset_upload_id")
+            if not upload_url or not asset_upload_id:
+                raise Exception(f"Unexpected upload_url response: {upload_url_data}")
+
+            # Step 2 — upload the raw file to the pre-signed URL (no auth header)
+            upload_response = _requests.put(
+                upload_url,
+                data=file_bytes,
+                headers={"Content-Type": content_type},
+                timeout=60,
+            )
+            upload_response.raise_for_status()
+
+            # Step 3 — create the media object
+            media_data = self._api_post(
+                "/guide/medias",
+                {"asset_upload_id": asset_upload_id, "filename": filename},
+            )
+            guide_media_id = media_data.get("id")
+            if not guide_media_id:
+                raise Exception(f"Unexpected guide/medias response: {media_data}")
+
+            # Step 4 — attach the media to the article
+            attachment_data = self._api_post_multipart(
+                f"/help_center/articles/{article_id}/attachments",
+                {"guide_media_id": str(guide_media_id), "inline": str(inline).lower()},
+            )
+            a = attachment_data.get("article_attachment", {})
+            return {
+                "id": a.get("id"),
+                "filename": a.get("file_name"),
+                "content_url": a.get("content_url"),
+                "content_type": a.get("content_type"),
+                "size": a.get("size"),
+                "inline": a.get("inline"),
+            }
+        except (ValueError, _requests.HTTPError):
+            raise
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to upload attachment: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to upload attachment: {str(e)}")
 
     # ------------------------------------------------------------------
     # Tickets — write

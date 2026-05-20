@@ -162,6 +162,42 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="upload_article_attachment",
+            description=(
+                "Upload an image or file and attach it to an existing Help Center article. "
+                "Returns content_url which can be embedded in the article HTML body "
+                "(<img src='content_url'> for inline images, <a href='content_url'> for downloads). "
+                "The article must already exist before uploading. Max file size: 20 MB."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "article_id": {
+                        "type": "integer",
+                        "description": "ID of the article to attach the file to"
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "File name including extension, e.g. screenshot.png"
+                    },
+                    "file_content_base64": {
+                        "type": "string",
+                        "description": "Base64-encoded file content"
+                    },
+                    "content_type": {
+                        "type": "string",
+                        "description": "MIME type of the file, e.g. image/png, image/jpeg"
+                    },
+                    "inline": {
+                        "type": "boolean",
+                        "description": "True to embed inline in article body (images), false for downloadable attachment (default: true)",
+                        "default": True
+                    }
+                },
+                "required": ["article_id", "filename", "file_content_base64", "content_type"]
+            }
+        ),
+        types.Tool(
             name="create_internal_note",
             description="Post an internal (non-public) note on an existing Zendesk ticket. The note is only visible to agents, never to the customer.",
             inputSchema={
@@ -453,6 +489,29 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(article, indent=2)
+            )]
+
+        elif name == "upload_article_attachment":
+            if not arguments:
+                raise ValueError("Missing arguments")
+            attachment = zendesk_client.upload_article_attachment(
+                article_id=arguments["article_id"],
+                filename=arguments["filename"],
+                file_content_base64=arguments["file_content_base64"],
+                content_type=arguments["content_type"],
+                inline=arguments.get("inline", True),
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "message": "Attachment uploaded successfully",
+                    "attachment": attachment,
+                    "embed_html": (
+                        f'<img src="{attachment["content_url"]}" alt="{attachment["filename"]}">'
+                        if arguments.get("inline", True)
+                        else f'<a href="{attachment["content_url"]}">{attachment["filename"]}</a>'
+                    )
+                }, indent=2)
             )]
 
         elif name == "create_internal_note":
