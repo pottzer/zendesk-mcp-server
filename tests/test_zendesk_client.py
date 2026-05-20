@@ -118,3 +118,34 @@ def test_get_article_returns_expected_id(client):
     article = client.get_article(article_id)
     assert article["id"] == article_id
     assert "body" in article
+
+
+def test_update_article_persists_title_and_body(client):
+    """Regression test: title and body must be routed to the translations endpoint."""
+    article_id = int(os.environ.get("TEST_ARTICLE_ID", 0))
+    if not article_id:
+        pytest.skip("TEST_ARTICLE_ID not set — required for write regression test")
+
+    original = client.get_article(article_id)
+    sentinel_title = original["title"] + " [update-test]"
+    sentinel_body = (original.get("body") or "") + "<!-- update-test -->"
+
+    try:
+        updated = client.update_article(
+            article_id=article_id,
+            title=sentinel_title,
+            body=sentinel_body,
+        )
+        assert updated["title"] == sentinel_title, (
+            f"title not persisted — got {updated['title']!r}, expected {sentinel_title!r}"
+        )
+        assert "update-test" in (updated.get("body") or ""), (
+            "body not persisted — update-test sentinel missing from returned body"
+        )
+    finally:
+        # Restore original values regardless of assertion outcome.
+        client.update_article(
+            article_id=article_id,
+            title=original["title"],
+            body=original.get("body") or "",
+        )

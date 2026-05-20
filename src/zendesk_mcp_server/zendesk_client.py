@@ -631,33 +631,37 @@ class ZendeskClient:
         draft: bool | None = None,
         label_names: List[str] | None = None,
         promoted: bool | None = None,
+        locale: str = 'en-us',
     ) -> Dict[str, Any]:
+        # title and body are stored on the translation object, not the article.
+        # They require a separate PUT to /translations/{locale}.
         try:
-            payload: Dict[str, Any] = {}
+            translation_payload: Dict[str, Any] = {}
             if title is not None:
-                payload['title'] = title
+                translation_payload['title'] = title
             if body is not None:
-                payload['body'] = body
+                translation_payload['body'] = body
+            if translation_payload:
+                self._api_put(
+                    f"/help_center/articles/{article_id}/translations/{locale}",
+                    {'translation': translation_payload},
+                )
+
+            article_payload: Dict[str, Any] = {}
             if draft is not None:
-                payload['draft'] = draft
+                article_payload['draft'] = draft
             if label_names is not None:
-                payload['label_names'] = label_names
+                article_payload['label_names'] = label_names
             if promoted is not None:
-                payload['promoted'] = promoted
-            data = self._api_put(f"/help_center/articles/{article_id}", {'article': payload})
-            a = data.get('article', {})
-            return {
-                'id': a.get('id'),
-                'title': a.get('title'),
-                'locale': a.get('locale'),
-                'section_id': a.get('section_id'),
-                'draft': a.get('draft'),
-                'promoted': a.get('promoted'),
-                'label_names': a.get('label_names'),
-                'html_url': a.get('html_url'),
-                'created_at': a.get('created_at'),
-                'updated_at': a.get('updated_at'),
-            }
+                article_payload['promoted'] = promoted
+            if article_payload:
+                self._api_put(
+                    f"/help_center/articles/{article_id}",
+                    {'article': article_payload},
+                )
+
+            # Return the live article state to confirm all changes persisted.
+            return self.get_article(article_id, locale=locale)
         except urllib.error.HTTPError as e:
             error_body = e.read().decode() if e.fp else "No response body"
             raise Exception(f"Failed to update article {article_id}: HTTP {e.code} - {e.reason}. {error_body}")

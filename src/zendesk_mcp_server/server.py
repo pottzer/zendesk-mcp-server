@@ -301,7 +301,12 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="update_article",
-            description="Update an existing Help Center article. Body accepts raw HTML.",
+            description=(
+                "Update an existing Help Center article. "
+                "Title and body are routed to the translation endpoint for the given locale. "
+                "draft, label_names, and promoted update article metadata. "
+                "Returns the live article state fetched after the update to confirm changes persisted."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -310,7 +315,8 @@ async def handle_list_tools() -> list[types.Tool]:
                     "body": {"type": "string", "description": "New article body as raw HTML"},
                     "draft": {"type": "boolean", "description": "Draft status"},
                     "label_names": {"type": "array", "items": {"type": "string"}, "description": "Labels to apply"},
-                    "promoted": {"type": "boolean", "description": "Pin article to top of section"}
+                    "promoted": {"type": "boolean", "description": "Pin article to top of section"},
+                    "locale": {"type": "string", "description": "Locale of the translation to update (default: en-us)", "default": "en-us"}
                 },
                 "required": ["article_id"]
             }
@@ -607,6 +613,7 @@ async def handle_call_tool(
                 draft=arguments.get("draft"),
                 label_names=arguments.get("label_names"),
                 promoted=arguments.get("promoted"),
+                locale=arguments.get("locale", "en-us"),
             )
             return [types.TextContent(
                 type="text",
